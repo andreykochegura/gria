@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/andreykochegura/gria/actions/workflows/CI.yml/badge.svg)](https://github.com/andreykochegura/gria/actions/workflows/CI.yml)
 [![Coverage](https://codecov.io/gh/andreykochegura/gria/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/gria)
-
+![With AI](https://img.shields.io/badge/With-AI-red?style=flat)
 
 Тестовое на вакансию биоинформатика-разработчика.
 
@@ -29,7 +29,7 @@ uv run gria example.xlsx
 2. Вкладка "Вклады": дубль -> ошибка в консоль, использовал первый.
 3. Вкладка "Пороги": "риск в пределах нормы нарушения" - не по русски, но оставил, как есть.
 4. Вкладка "Образцы": 
-    * Образец S02 генотип GPX1 rs1050450 - результат мог быть получен по обратной цепи -> warning в консоль и заменил A/G на T/C
-    * Образец S02 генотип G6PD rs1050828 - X-сцепленный диплоидный генотип у мужчины -> error в консоль и заменил генотип на None
-    * ПРОВЕРИТЬ заменил на None и error в консоль
-
+    * Образец S02 генотип GPX1 rs1050450 - результат мог быть получен по обратной цепи -> warning в консоль и заменил A/G на T/C.
+    * Образец S03 генотип G6PD rs1050828 - X-сцепленный диплоидный генотип у мужчины -> error в консоль, генотип не участвует в расчёте.
+    * ПРОВЕРИТЬ - захардкодил, приводит к "Недостаточно данных" для признака, к которому относится, и выводит warning в stderr.
+    * Битые, некорректные, мусорные и пустые генотипы выводятся в stderr как error и исключаются из расчётов

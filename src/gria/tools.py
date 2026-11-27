@@ -4,10 +4,10 @@ from math import ceil
 from fractions import Fraction
 
 
-def roundup(x: Fraction, digits: int = 2) -> float:
+def roundup(x: Fraction, digits: int = 2) -> Fraction:
     k = 10 ** digits
     r = Fraction(ceil(abs(x) * k), k)
-    return float(-r if x < 0 else r)
+    return -r if x < 0 else r
 
 
 Dataset = dict[str, pd.DataFrame]

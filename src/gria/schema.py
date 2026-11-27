@@ -4,6 +4,7 @@ from fractions import Fraction
 
 GENOTYPE_VALUES = {"A/A", "A/C", "A/G", "A/T", "C/C", "C/G", "C/T", "G/G", "G/T", "T/T", "A", "C", "G", "T"}
 CHROMOSOME_VALUES = {*(str(i) for i in range(1, 23)), "X", "Y"}
+CHECK_MARKER = "ПРОВЕРИТЬ"  # genotype flagged for manual review: its feature is reported as insufficient
 
 
 GENE_REGEX = re.compile(r"^[A-Z][A-Z0-9_-]*$")
@@ -112,6 +113,7 @@ SCHEMA = {
         "thresholds": {
             "name": "Пороги",
             "unique_keys": ["feature_code", "lower_bound"],
+            "invalid_rows": "fail",
             "columns": {
                 "feature_code": {
                     "name": "Код признака",
@@ -156,7 +158,7 @@ SCHEMA = {
                     "name_reg": GENOTYPE_COLUMN_REGEX,
                     "name_examples": ["SOD2 rs4880", "GPX1 rs1050450"],
                     "type": str,
-                    "values": GENOTYPE_VALUES,
+                    # genotypes are checked per sample and variant in the analyzer
                 },
             },
         },

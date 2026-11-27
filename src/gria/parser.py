@@ -1,3 +1,4 @@
+from fractions import Fraction
 from pathlib import Path
 import pandas as pd
 from gria.schema import SCHEMA
@@ -16,6 +17,7 @@ def parse(path) -> Dataset:
     convert_types(data)
     validate_values(data)
     rename_dataset(data)
+    drop_invalid_rows(data)
     remove_duplicates(data)
 
     return data
@@ -83,6 +85,14 @@ def validate_schema(data: Dataset) -> None:
                 raise ParseError(f"No columns like '{examples}' on '{sheet_name}'")
 
 
+def convert_value(value, column_type):
+    if pd.isna(value):
+        return None
+    if column_type is Fraction and isinstance(value, float):
+        value = repr(value)  # Fraction(0.1) is inexact, Fraction("0.1") is exactly 1/10
+    return column_type(value)
+
+
 def convert_types(data: Dataset) -> None:
     for sheet_schema in SCHEMA["sheets"].values():
         sheet_name = sheet_schema["name"]
@@ -104,12 +114,52 @@ def convert_types(data: Dataset) -> None:
             column_type = column_schema["type"]
             for i, value in sheet[column_name].items():
                 try:
-                    sheet.at[i, column_name] = column_type(value)  # oh!
+                    sheet.at[i, column_name] = convert_value(value, column_type)  # oh!
                 except Exception as exc:
-                    print(exc)
                     error(f"Failed to convert value '{value}' into '{column_type}'. Sheet: '{sheet_name}', "
                           f"column: '{column_name}', index: '{i}'. Value was replaced by 'None'. Error: {exc}")
                     sheet.at[i, column_name] = None
+
+
+def normalize_choice(value, allowed: set):
+    """Match `value` against `allowed` ignoring case and allele order; return the canonical form."""
+    text = str(value).strip()
+    lookup = {item.casefold(): item for item in allowed}
+    for candidate in (text, "/".join(sorted(text.split("/")))):
+        if candidate.casefold() in lookup:
+            return lookup[candidate.casefold()]
+    raise ValueError("is not an allowed value")
+
+
+def check_value(value, column_schema: dict):
+    """Return the value (normalized where the schema allows it) or raise ValueError with the reason."""
+    regex = column_schema.get("regex")
+    if regex is not None and not regex.fullmatch(str(value)):
+        raise ValueError(f"does not match '{regex.pattern}'")
+
+    allowed = column_schema.get("values")
+    if allowed is not None:
+        value = normalize_choice(value, allowed)
+
+    min_value = column_schema.get("min_value")
+    if min_value is not None and value < min_value:
+        raise ValueError(f"is less than {min_value}")
+
+    max_value = column_schema.get("max_value")
+    if max_value is not None and value > max_value:
+        raise ValueError(f"is greater than {max_value}")
+
+    precision = column_schema.get("precision")
+    if precision is not None and (value * 10 ** precision).denominator != 1:
+        raise ValueError(f"has more than {precision} decimal places")
+
+    item_regex = column_schema.get("item_regex")
+    if item_regex is not None:
+        for item in value.split(column_schema.get("delimiter", ",")):
+            if not item_regex.fullmatch(item.strip()):
+                raise ValueError(f"item '{item.strip()}' does not match '{item_regex.pattern}'")
+
+    return value
 
 
 def validate_values(data: Dataset) -> None:
@@ -130,17 +180,32 @@ def validate_values(data: Dataset) -> None:
             if column_schema is None:
                 continue
 
-            regex = column_schema.get("regex")
-            if regex is None:
-                continue
-
             for i, value in sheet[column_name].items():
                 if value is None:
                     continue
 
-                if not regex.fullmatch(str(value)):
-                    error(f"Failed to validate value '{value}'. Sheet: '{sheet_name}', column: '{column_name}', index: '{i}'. Value was replaced by 'None'")
+                try:
+                    sheet.at[i, column_name] = check_value(value, column_schema)
+                except ValueError as exc:
+                    error(f"Failed to validate value '{value}': {exc}. Sheet: '{sheet_name}', column: '{column_name}', index: '{i}'. Value was replaced by 'None'")
                     sheet.at[i, column_name] = None
+
+
+def drop_invalid_rows(data: Dataset) -> None:
+    for sheet_key, sheet_schema in SCHEMA["sheets"].items():
+        df = data[sheet_key]
+        invalid = df[list(sheet_schema["columns"])].isna().any(axis=1)
+        if not invalid.any():
+            continue
+
+        indexes = list(df.index[invalid])
+        if sheet_schema.get("invalid_rows") == "fail":
+            raise ParseError(f"Invalid values on sheet '{sheet_schema['name']}', index: {indexes}. "
+                             f"Skipping a row here would silently change the results")
+
+        for i in indexes:
+            error(f"Row was dropped because of invalid values. Sheet: '{sheet_schema['name']}', index: '{i}'")
+        data[sheet_key] = df[~invalid].reset_index(drop=True)
 
 
 def remove_duplicates(data: Dataset) -> None:

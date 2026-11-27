@@ -1,5 +1,6 @@
 import pandas as pd
 from fractions import Fraction
+from gria.schema import CHECK_MARKER, GENOTYPE_VALUES
 from gria.tools import error, warning, info, Dataset, roundup
 
 
@@ -29,6 +30,10 @@ def normalize_genotype(genotype: str) -> str:
     return "/".join(sorted(genotype.strip().upper().split("/")))
 
 
+def is_valid_genotype(genotype: str) -> bool:
+    return normalize_genotype(genotype) in GENOTYPE_VALUES
+
+
 def is_matches_genotype(genotype: str, variant_alleles: str) -> bool:
     genotype = genotype.strip().upper()
     return set(genotype.replace("/", "")).issubset(set(variant_alleles.replace("/", "")))
@@ -47,17 +52,18 @@ def is_palindromic(alleles: str) -> bool:
 
 
 def get_threshold(score: Fraction, feature_thresholds: pd.DataFrame) -> dict | None:
-    applicable = [row for row in feature_thresholds.to_dict("records") if roundup(score) >= row["lower_bound"]]
+    rounded = roundup(score)
+    applicable = [row for row in feature_thresholds.to_dict("records") if rounded >= row["lower_bound"]]
     if not applicable:
         return None
     return max(applicable, key=lambda row: row["lower_bound"])
 
 
-def delete_palindromic_variants(variants: pd.DataFrame) -> pd.DataFrame:
+def split_palindromic_variants(variants: pd.DataFrame) -> tuple[pd.DataFrame, set[str]]:
     mask = variants["alleles"].apply(is_palindromic)
     for rsid, pvar in variants[mask].iterrows():
         error(f"Palindromic allele is excluded from analysis. gen: {pvar['gen']}, rsID: {rsid}")
-    return variants[~mask].copy()
+    return variants[~mask].copy(), set(variants.index[mask])
 
 
 def analyze(data: Dataset):
@@ -68,7 +74,7 @@ def analyze(data: Dataset):
     samples = data["samples"]
     contribution_index = {(row.feature_code, row.gen, row.rsid, normalize_genotype(row.genotype)): row.contribution for row in contributions.itertuples(index=False)}
     
-    variants = delete_palindromic_variants(variants)
+    variants, palindromic_rsids = split_palindromic_variants(variants)
 
     results = []
 
@@ -82,6 +88,9 @@ def analyze(data: Dataset):
             inputs_used = 0
             failed = False
             for rsid in feature_variants:
+                if rsid in palindromic_rsids:
+                    continue
+
                 if rsid not in variants.index:
                     error(f"Variant not found. rsID: {rsid}, sample: {sample_id}, feature: {feature_code}")
                     failed = True
@@ -93,24 +102,32 @@ def analyze(data: Dataset):
                 genotype = sample.get(genotype_column)
 
                 if pd.isna(genotype) or not str(genotype).strip():
+                    error(f"Empty genotype in '{genotype_column}' of sample '{sample_id}'. Excluded from calculation")
                     continue
 
                 genotype = str(genotype).strip().upper()
+
+                if genotype == CHECK_MARKER:
+                    warning(f"Genotype '{CHECK_MARKER}' in '{genotype_column}' of sample '{sample_id}'. "
+                            f"Feature '{feature_code}' is insufficient")
+                    failed = True
+                    insufficient(results, sample_id, feature_name)
+                    break
+
+                if not is_valid_genotype(genotype):
+                    error(f"Wrong genotype '{genotype}' in '{genotype_column}' of sample '{sample_id}'. Excluded from calculation")
+                    continue
 
                 if is_complemented_genotype(genotype, variant.alleles) and not is_matches_genotype(genotype, variant.alleles):
                     warning(f"Strand orientation mismatch: '{genotype}' in '{genotype_column}' of sample '{sample_id}'. Complementing genotype to `{get_complement_alleles(genotype)}`")
                     genotype = get_complement_alleles(genotype)
                 elif not is_matches_genotype(genotype, variant.alleles):
-                    error(f"Wrong genotype '{genotype}' in '{genotype_column}' of sample '{sample_id}'")
-                    failed = True
-                    insufficient(results, sample_id, feature_name)
-                    break
-                
+                    error(f"Wrong genotype '{genotype}' in '{genotype_column}' of sample '{sample_id}'. Excluded from calculation")
+                    continue
+
                 if not is_valid_ploidy(genotype, sample["sex"], variant["chromosome"]):
-                    error(f"Wrong ploidy for genotype '{genotype}' in '{genotype_column}' of sample '{sample_id}'")
-                    failed = True
-                    insufficient(results, sample_id, feature_name)
-                    break
+                    error(f"Wrong ploidy for genotype '{genotype}' in '{genotype_column}' of sample '{sample_id}'. Excluded from calculation")
+                    continue
 
                 key = (feature_code, variant.gen, rsid, normalize_genotype(genotype))
 
@@ -127,6 +144,8 @@ def analyze(data: Dataset):
                 continue
 
             if inputs_used < feature["min_inputs"]:
+                warning(f"Not enough inputs: {inputs_used} of {feature['min_inputs']} required. "
+                        f"sample: {sample_id}, feature: {feature_code}")
                 insufficient(results, sample_id, feature_name)
                 continue
 
@@ -143,7 +162,7 @@ def analyze(data: Dataset):
                 "sample_id": sample_id,
                 "feature_code": feature_code,
                 "feature_name": feature_name,
-                "score": roundup(score),
+                "score": float(roundup(score)),
                 "inputs_used": inputs_used,
                 "level": threshold["level"],
                 "conclusion": threshold["conclusion"],
