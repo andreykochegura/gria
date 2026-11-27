@@ -8,11 +8,11 @@
 
 ### Запуск
 ``` bash
-    pip install uv
-    git clone https://github.com/andreykochegura/gria.git
-    cd gria
-    uv sync
-    uv run gria example.xlsx
+pip install uv
+git clone https://github.com/andreykochegura/gria.git
+cd gria
+uv sync
+uv run gria example.xlsx
 ```
 
 ### Допущения, проблемы, обработка
