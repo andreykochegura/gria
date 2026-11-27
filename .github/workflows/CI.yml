@@ -3,6 +3,12 @@ name: Tests and Codecov
 on:
   push:
     branches: [main, master, dev]
+    paths:
+      - 'gria/**/*.py'
+      - 'tests/**/*.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/coverage.yml'
   pull_request:
 permissions:
   contents: read
