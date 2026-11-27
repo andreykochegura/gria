@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/andreykochegura/gria/actions/workflows/CI.yml/badge.svg)](https://github.com/andreykochegura/gria/actions/workflows/CI.yml)
 [![Coverage](https://codecov.io/gh/andreykochegura/gria/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/gria)
-![With AI](https://img.shields.io/badge/With-AI-red?style=flat)
+
 
 Тестовое на вакансию биоинформатика-разработчика.
 
