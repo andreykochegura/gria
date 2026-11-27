@@ -1,6 +1,6 @@
 ### GRIA - Genetic Risk Interpreter and Analysator
 
-[![CI](https://github.com/andreykochegura/gria/actions/workflows/CI.yml/badge.svg)](https://github.com/andreykochegura/gria/actions/workflows/coverage.yml)
+[![CI](https://github.com/andreykochegura/gria/actions/workflows/coverage.yml/badge.svg)](https://github.com/andreykochegura/gria/actions/workflows/coverage.yml)
 [![Coverage](https://codecov.io/gh/andreykochegura/gria/branch/master/graph/badge.svg)](https://codecov.io/gh/andreykochegura/gria)
 
 
